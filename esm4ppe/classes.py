@@ -51,12 +51,13 @@ class esm4ppeObj:
         if type(ensemble)==xr.DataArray:
             ensemble = ensemble.to_dataset()
         self.ensemble = ensemble
+        return self
         
     def add_control(self):
         print("Opening control...",end=" ")
         self.control = open_control(self.variable,self.frequency,self.constraint)
         print("control opened.")
-        
+        return self
         
     def verify(self,metric,saveskill=False,**pm_args):
         verifypath = get_verifypath(metric,**pm_args)
