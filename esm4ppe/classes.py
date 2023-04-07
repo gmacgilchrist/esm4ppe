@@ -80,13 +80,15 @@ class esm4ppeObj:
         self.verifypath = verifypath
         return vs
     
-    def issue_dmget(self,dataset):
-        if dataset=='ensemble':
+    def issue_dmget(self,dataset=None):
+        if dataset is None:
+            print('Issuing dmget for both ensemble and control')
+            issue_dmget_esm4ppe(self.variable,self.frequency,self.constraint,startyear='*')
+            issue_dmget_esm4ppe(self.variable,self.frequency,self.constraint)
+        elif dataset=='ensemble':
             issue_dmget_esm4ppe(self.variable,self.frequency,self.constraint,startyear='*')
         elif dataset=='control':
             issue_dmget_esm4ppe(self.variable,self.frequency,self.constraint)
-        else:
-            raise Exception("Must specify dataset as 'ensemble' or 'control'.")
     
     def _verify(self,metric,**pm_args):
         if metric=='ppp':
