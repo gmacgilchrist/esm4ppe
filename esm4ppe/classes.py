@@ -7,6 +7,7 @@ from dask.diagnostics import ProgressBar
 from esm4ppe.version import sysconfig
 from esm4ppe.processing import *
 from esm4ppe.calculations import *
+from esm4ppe.organization import *
 
 class esm4ppeObj:
     def __init__(self,variable,frequency,constraint=None):
@@ -44,8 +45,8 @@ class esm4ppeObj:
             else:
                 raise Exception("Zarr store not available for "+
                                 self.variable+" at zarrpath "+
-                                get_zarrpath(self.variable,self.frequency)+"."+
-                                "Set triggeropen=True to open and save the ensemble."+
+                                get_zarrdir(self.variable,self.frequency)+"."+
+                                " Set triggeropen=True to open and save the ensemble."+
                                 " This can take some time to process.")
         
         if type(ensemble)==xr.DataArray:
@@ -78,6 +79,14 @@ class esm4ppeObj:
         self._vs = vs
         self.verifypath = verifypath
         return vs
+    
+    def issue_dmget(self,dataset):
+        if dataset=='ensemble':
+            issue_dmget_esm4ppe(self.variable,self.frequency,self.constraint,startyear='*')
+        elif dataset=='control':
+            issue_dmget_esm4ppe(self.variable,self.frequency,self.constraint)
+        else:
+            raise Exception("Must specify dataset as 'ensemble' or 'control'.")
     
     def _verify(self,metric,**pm_args):
         if metric=='ppp':
