@@ -3,6 +3,11 @@ Collection of calculations for operating on ESM4 PPE simulations.
 """
 
 from esm4ppe.version import sysconfig
+from esm4ppe.utils import *
+
+import xarray as xr
+import numpy as np
+from dask.diagnostics import ProgressBar
 
 def calc_ensemblevariance(ds,groupby=None):
     """
@@ -55,3 +60,34 @@ def calc_ppp(ds,control,groupby,frequency,nlead):
     # PPP
     ppp = 1-(evarmean/cvar)
     return ppp
+
+def _calc_regionalmean(da,mask,weights):
+    dims = get_dimensionslesstime(da)
+    return da.where(mask,drop=True).weighted(weights.fillna(0)).mean(dims)
+
+def calc_regionalmean(da,masks,weights,verbose=False):
+    ''' Calculate regional means for [da] based on [masks].
+    Return DataArray with "region" dimension corresponding to masknames.'''
+    dims_out = get_dimensionslessxy(da)
+    coords_out = {}
+    for d in dims_out:
+        coords_out[d] = da.coords[d]
+    coords_out['region']=list(masks.keys())
+    
+    da_out = xr.DataArray(dims=coords_out.keys(),coords=coords_out,name=da.name)
+        
+    for name,mask in masks.items():
+        if verbose:
+            print(name, end = ' ')
+            da_out.loc[{'region':name}] = _calc_regionalmean(da,mask,weights).transpose(*dims_out)
+        else:
+            da_out.loc[{'region':name}] = _calc_regionalmean(da,mask,weights).transpose(*dims_out)
+    return da_out
+
+def calc_climatology(ds,groupby):
+    """
+    Calculate the climatology of [ds] within groupings of [groupby].
+    [groupby] should be "time.month" for monthly data and
+    "time.dayofyear" for daily data.\
+    """
+    return ds.groupby(groupby).mean()

@@ -150,20 +150,29 @@ def get_verifypath(metric,**pm_args):
         else:
             string= '-'.join([key,value])
         verifypathstrings.append(string)
-    return rootpath+'.'.join(verifypathstrings)
+    return sysconfig['verifypathroot']+'.'.join(verifypathstrings)
 
-def get_ncfilename(args):
+def get_filenamelist(variable,frequency):
     """
     Return the filename for saving a netcdf file given the variable, frequency and constraint.
     """
-    tmp = list(args.values())
-    tmp_nonone = [i for i in tmp if i is not None]
-    return '.'.join(tmp_nonone)+'.nc'
+    modelcomponent = get_modelcomponent(variable,frequency)
+    tmp = [modelcomponent,variable,frequency]
+    return tmp
+
+def build_ncfilename(filenamelist):
+    return '.'.join(filenamelist)+'.nc'
 
 def get_zarrdir(variable,frequency):
     """
     Return the zarr store directory name.
     """
-    ppname = get_ppname(variable,frequency).split('_')
-    modelcomponent = ppname[0]
+    modelcomponent = get_modelcomponent(variable,frequency)
     return '.'.join([modelcomponent,frequency])
+
+def get_modelcomponent(variable,frequency):
+    """
+    Return the name of the model component for the given variable.
+    """
+    ppname = get_ppname(variable,frequency).split('_')
+    return ppname[0]

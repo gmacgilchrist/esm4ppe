@@ -3,6 +3,8 @@
 import xarray as xr
 import numpy as np
 import cftime
+import datetime
+import time
 
 from esm4ppe.version import sysconfig
 from esm4ppe.organization import *
@@ -93,7 +95,7 @@ def open_ensemble(variable,frequency,constraint=None,startyear="*",startmonth=No
     # Check to see if files are on disk or tape
     ondisk = gu.core.query_ondisk(path)
     if list(ondisk.values()).count(False)>0:
-        raise Exception("Not all files (ENSEMBLES) available on disk. Use issue_dmget_ensemble(variable,frequency,...) to migrate from tape.")
+        raise Exception("Not all files (ENSEMBLES) available on disk. Use issue_dmget_esm4ppe(variable,frequency,...) to migrate from tape.")
     ds = xr.open_mfdataset(path,preprocess=preprocess_climpred)
     # Add control as member
     if controlasmember:
@@ -101,7 +103,7 @@ def open_ensemble(variable,frequency,constraint=None,startyear="*",startmonth=No
         ds = add_controlasmember(ds,control)
     return ds
 
-def issue_dmget_esm4ppe(variable,frequency,constraint=None,startyear=None,startmonth=None):
+def issue_dmget_esm4ppe(variable,frequency,constraint=None,startyear=None,startmonth=None,wait=False):
     """
     Issue a dmget command for the relevant variable and frequency and for the start year and month
     specified. If no start year or month is specified, this issues a dmget for the control simulation.
@@ -115,6 +117,21 @@ def issue_dmget_esm4ppe(variable,frequency,constraint=None,startyear=None,startm
     path = gu.core.get_pathspp(**pathDict)
     ondisk = gu.core.query_ondisk(path)
     ontape = {key: value for key, value in ondisk.items() if value==False}
-    out = gu.core.issue_dmget(list(ontape.keys()))
-    return out
+    if len(ontape)==0:
+        print("Everything already on disk.")
+        return
+    else:
+        print("Issuing dmget.")
+        out = gu.core.issue_dmget(list(ontape.keys()))
+        if wait:
+            # Sleep for a moment to make sure the command has issued
+            time.sleep(3)
+            # Now check
+            count = 0
+            while gu.core.query_dmget()==1:
+                count+=1
+                if count%500==0:
+                    print("Still in queue at :",end=" ")
+                    print(datetime.datetime.now())
+        return ontape.keys()
 
