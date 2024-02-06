@@ -141,8 +141,13 @@ def get_verifypath(metric,**pm_args):
     Return the directory for a skill metric.
     """
     rootpath = '/work/gam/projects/esm4_ppe/data/processed/verify/'
+    verifydirectoryname = get_verifydirectoryname(metric,**pm_args)
+    return '/'.join([sysconfig['verifypathroot'],verifydirectoryname])
+
+def get_verifydirectoryname(metric,**pm_args):
     verifypathstrings = ['verify','metric-'+metric]
-    for key,value in pm_args.items():
+    sorted_args = dict(sorted(pm_args.items()))
+    for key,value in sorted_args.items():
         if value==None:
             continue
         elif type(value)==list:
@@ -150,8 +155,8 @@ def get_verifypath(metric,**pm_args):
         else:
             string= '-'.join([key,value])
         verifypathstrings.append(string)
-    return sysconfig['verifypathroot']+'.'.join(verifypathstrings)
-
+    return '.'.join(verifypathstrings)
+        
 def get_filenamelist(variable,frequency):
     """
     Return the filename for saving a netcdf file given the variable, frequency and constraint.
@@ -170,9 +175,33 @@ def get_zarrdir(variable,frequency):
     modelcomponent = get_modelcomponent(variable,frequency)
     return '.'.join([modelcomponent,frequency])
 
+def get_zarrpath(variable,frequency,ensembleorcontrol):
+    if ensembleorcontrol=='ensemble':
+        localname='climpred_zarr'
+    elif ensembleorcontrol=='control':
+        localname='control_zarr'
+    return '/'.join([sysconfig['zarrpathroot'],localname,get_zarrdir(variable,frequency)])
+
+def get_zarrvariablepath(variable,frequency,ensembleorcontrol):
+    return '/'.join([get_zarrpath(variable,frequency,ensembleorcontrol),variable])
+
 def get_modelcomponent(variable,frequency):
     """
     Return the name of the model component for the given variable.
     """
     ppname = get_ppname(variable,frequency).split('_')
     return ppname[0]
+
+### CORRELATION DIRECTORY AND PATHS ###
+def get_savefilelist_correlation(var1,var2,frequency='monthly',metric='pearson',**args):
+    savefilelist = [metric,'-'.join([var1,var2])]
+    for key,value in args.items():
+        if value:
+            savefilelist.append(key)
+    return savefilelist
+
+def get_path_correlation(var1,var2,frequency='monthly',metric='pearson',**args):
+    savefilelist = get_savefilelist_correlation(var1,var2,frequency=frequency,metric=metric,**args)
+    savedir = sysconfig['correlationpathroot']
+    filename = build_ncfilename(savefilelist)
+    return '/'.join([savedir,filename])

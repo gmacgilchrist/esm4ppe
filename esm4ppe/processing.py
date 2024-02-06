@@ -9,12 +9,23 @@ import time
 from esm4ppe.version import sysconfig
 from esm4ppe.organization import *
 
-def preprocess_climpred(ds,leadunits='months'):
+def preprocess_climpred(ds):
     """
     Preprocessing function for use with xr.open_mfdataset. This processsing transforms the 
     dataset being opened into one that is compatible with the climpred format.
     """
     nt = len(ds['time'])
+    # determine time frequency from time_bnds
+    firstdiff =  ds['time_bnds'].diff('nv')[0].values[0]
+    # if timedelta object, convert to seconds
+    if type(firstdiff)==datetime.timedelta:
+        firstdiff = firstdiff.total_seconds()
+    if int(firstdiff) == 86400:
+        leadunits = 'days'
+    elif int(firstdiff) > 31*86400:
+        leadunits = 'years'
+    else:
+        leadunits = 'months'
     leadunitsperyear = {'years':1,
                         'months':12,
                         'days':365}
@@ -39,7 +50,7 @@ def preprocess_climpred(ds,leadunits='months'):
     # Assign "lead" coordinate
     ds = ds.rename({'time':'lead'}).assign_coords({'lead':np.arange(leadstart,leadstart+nt)})
     ds['lead'].attrs['units']=leadunits
-        
+    
     ds = ds.chunk({'lead':-1})
     return ds
 
@@ -54,7 +65,7 @@ def add_controlasmember(ds,control):
         if init.dt.month==1:
             nlead = len(ds['lead'])
         else:
-            nlead = 36
+            nlead = int(3*len(ds['lead'])/10)
         timeslice = slice(
             ds['time_bnds'].sel(init=init).isel(nv=0,member=0,lead=0).values,
             ds['time_bnds'].sel(init=init).isel(nv=1,member=0,lead=nlead-1).values)
@@ -73,9 +84,10 @@ def open_control(variable,frequency,constraint=None):
     """
     pathDict = get_pathDict(variable,frequency,constraint=constraint)
     path = gu.core.get_pathspp(**pathDict)
-    ondisk = gu.core.query_ondisk(path)
-    if list(ondisk.values()).count(False)>0:
-        raise Exception("Not all files (CONTROL) available on disk. Use issue_dmget_ensemble(variable,frequency,...) to migrate from tape.")
+    if sysconfig['os']=='ppan':
+        ondisk = gu.core.query_ondisk(path)
+        if list(ondisk.values()).count(False)>0:
+            raise Exception("Not all files (CONTROL) available on disk. Use issue_dmget_esm4ppe(variable,frequency,...) to migrate from tape.")
     return xr.open_mfdataset(path)
 
 def open_static(variable,frequency,constraint=None):
@@ -92,11 +104,15 @@ def open_ensemble(variable,frequency,constraint=None,startyear="*",startmonth=No
     """
     pathDict = get_pathDict(variable,frequency,constraint,startyear,startmonth)
     path = gu.core.get_pathspp(**pathDict)
-    # Check to see if files are on disk or tape
-    ondisk = gu.core.query_ondisk(path)
-    if list(ondisk.values()).count(False)>0:
-        raise Exception("Not all files (ENSEMBLES) available on disk. Use issue_dmget_esm4ppe(variable,frequency,...) to migrate from tape.")
+    if sysconfig['os']=='ppan':
+        # Check to see if files are on disk or tape
+        ondisk = gu.core.query_ondisk(path)
+        if list(ondisk.values()).count(False)>0:
+            raise Exception("Not all files (ENSEMBLES) available on disk. Use issue_dmget_esm4ppe(variable,frequency,...) to migrate from tape.")
     ds = xr.open_mfdataset(path,preprocess=preprocess_climpred)
+    # only open 1st year of data for daily data
+    if (frequency == "daily") & (sysconfig['nt_fordaily'] is not None):
+        ds = ds.isel(lead=slice(0,sysconfig['nt_fordaily']))
     # Add control as member
     if controlasmember:
         control = open_control(variable,frequency,constraint)

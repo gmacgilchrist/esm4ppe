@@ -5,6 +5,7 @@ Collection of functions to load or generate datasets with spatial masks on ESM4 
 import xarray as xr
 import numpy as np
 import re
+from esm4ppe.version import sysconfig
 
 def get_masks(name,static):
     if name=='LME':
@@ -13,7 +14,7 @@ def get_masks(name,static):
         return _basinmask(static)
 
 def _LMEmask():
-    path = '/work/gam/LargeMarineEcos/derived_masks/LME66.ESM4.nc'
+    path = sysconfig['datasetspathroot']+'/LargeMarineEcos/derived_masks/LME66.ESM4.nc'
     return xr.open_dataset(path)
 
 def _basinmask(static,geolon='geolon',geolat='geolat'):

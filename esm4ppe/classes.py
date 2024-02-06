@@ -25,16 +25,24 @@ class esm4ppeObj:
         
         self.coords = self.static.coords
         
-    def add_ensemble(self,triggeropen=False,startyear='*',startmonth=None,controlasmember=True):
-          
-        zarrpath = sysconfig['zarrpathroot']+'climpred_zarr/'+get_zarrdir(self.variable,self.frequency)
+    def add_ensemble(self,write=False,check=True,startyear='*',startmonth=None,controlasmember=True):
+        zarrpath = get_zarrpath(self.variable,self.frequency,ensembleorcontrol='ensemble')
         self.zarrpath_climpred = zarrpath
+        zarrpresent = os.path.exists(zarrpath+'/'+self.variable)
+        # look for the zarr store and either open it, or delete it if you wish to overwrite
+        if zarrpresent:
+            if write:
+                zarrpresent = delete_zarrvariable(self.variable,
+                                                  self.frequency,
+                                                  ensembleorcontrol='ensemble',
+                                                  check=check)
+            else:
+                ensemble = xr.open_zarr(zarrpath)[self.variable]
+                print("Ensemble present in zarr store... opening... ensemble opened.")
         
-        try:
-            ensemble = xr.open_zarr(zarrpath)[self.variable]
-            print("Ensemble present in zarr store... opening... ensemble opened.")
-        except:
-            if triggeropen:
+        # now open the ensemble
+        if zarrpresent==False:
+            if write:
                 print("Opening ensemble...",end=" ")
                 start = time.time()
                 ensemble = open_ensemble(self.variable,self.frequency,self.constraint,
@@ -42,7 +50,6 @@ class esm4ppeObj:
                                          startyear=startyear,startmonth=startmonth)
                 end = time.time()
                 print("... ensemble opened. Elapsed time: "+str(round(end-start))+" seconds.")
-                
                 ensemble = ensemble.drop(['time_bnds','nv']).chunk({'member':-1,'init':-1,'lead':1,'xh':"auto"})
                 print("Saving to zarr store...",end=" ")
                 with ProgressBar():
@@ -52,26 +59,36 @@ class esm4ppeObj:
                 raise Exception("Zarr store not available for "+
                                 self.variable+" at zarrpath "+
                                 get_zarrdir(self.variable,self.frequency)+"."+
-                                " Set triggeropen=True to open and save the ensemble."+
-                                " This can take some time to process.")
+                                " Set write=True to open and save the ensemble."+
+                                " This can take some time to process.")            
         
         if type(ensemble)==xr.DataArray:
             ensemble = ensemble.to_dataset()
         self.ensemble = ensemble
-        return self        
+        return self
+    
+    def add_control(self,write=False,check=True):
         
-    def add_control(self,triggeropen=False):
-        
-        zarrpath = sysconfig['zarrpathroot']+'control_zarr/'+get_zarrdir(self.variable,self.frequency)
+        zarrpath = get_zarrpath(self.variable,self.frequency,ensembleorcontrol='control')
         self.zarrpath_control = zarrpath
+        zarrpresent = os.path.exists(zarrpath+'/'+self.variable)
         
-        try:
-            control = xr.open_zarr(zarrpath)[self.variable]
-            print("Control present in zarr store... opening...",end=" ")
-        except:
-            if triggeropen:
+        # look for the zarr store and either open it, or delete it if you wish to overwrite
+        if zarrpresent:
+            if write:
+                zarrpresent = delete_zarrvariable(self.variable,
+                                                  self.frequency,
+                                                  ensembleorcontrol='control',
+                                                  check=check)
+            else:
+                control = xr.open_zarr(zarrpath)[self.variable]
+                print("Ensemble present in zarr store... opening... ensemble opened.")
+        
+        if zarrpresent==False:
+            if write:
                 print("Opening control...",end=" ")
                 control = open_control(self.variable,self.frequency,self.constraint)
+                control = control.chunk({"time":1,"xh":"auto","yh":"auto"})
                 print("saving to zarr store...",end=" ")
                 with ProgressBar():
                     control.to_zarr(zarrpath,mode='a')
@@ -95,12 +112,14 @@ class esm4ppeObj:
         if hasattr(self,'masksname'):
             filenamelist.append(self.masksname)
         filename = build_ncfilename(filenamelist)
-        path = verifypath+'/'+filename         
+        path = '/'.join([verifypath,filename])
         try:
             vs = xr.open_dataset(path)
             print("Opening skill metric... skill metric opened.")
         except:
+            print("Calculating skill metric...",end=" ")
             vs = self._verify(metric,**pm_args)
+            print("...skill metric calculated.")
             if saveskill:
                 isExist = os.path.exists(verifypath)
                 if not isExist:
@@ -144,7 +163,7 @@ class esm4ppeObj:
                     localdir = self.verifypath.split('/')[-1]
                 else:
                     localdir = dsname
-                rmpath = rmpathroot+localdir+'/'
+                rmpath = '/'.join([rmpathroot,localdir])
                 
                 if dsname == 'control':
                     da = self.control
@@ -154,7 +173,7 @@ class esm4ppeObj:
                     da = self.vs
                     
                 try:
-                    da = xr.open_dataset(rmpath+filename)
+                    da = xr.open_dataset('/'.join([rmpath,filename]))
                     print("Opening regional means of "+dsname+"... regional means of "+dsname+" opened.")
                 except:
                     start = time.time()
@@ -167,7 +186,7 @@ class esm4ppeObj:
                         isExist = os.path.exists(rmpath)
                         if not isExist:
                             os.mkdir(rmpath)
-                        da.to_netcdf(rmpath+filename)
+                        da.to_netcdf('/'.join([rmpath,filename]))
                     da = da.to_dataset()
                     
                 if dsname == 'control':
@@ -184,7 +203,7 @@ class esm4ppeObj:
         if hasattr(self,'masksname'):
             filenamelist.append(self.masksname)
         filename = build_ncfilename(filenamelist)
-        climpath = climpathroot+'/'+filename
+        climpath = '/'.join([climpathroot,filename])
         try:
             clim = xr.open_dataset(climpath)
             print("Opening climatology... climatology opened.")
@@ -218,3 +237,59 @@ class esm4ppeObj:
         elif dataset=='control':
             issue_dmget_esm4ppe(self.variable,self.frequency,self.constraint,wait=wait)
     
+def open_controlzarr(component,frequency):
+    zarrpath = '/'.join([sysconfig['zarrpathroot'],'control_zarr','.'.join([component,frequency])])
+    return xr.open_zarr(zarrpath)
+
+def open_climpredzarr(component,frequency):
+    zarrpath = '/'.join([sysconfig['zarrpathroot'],'climpred_zarr','.'.join([component,frequency])])
+    return xr.open_zarr(zarrpath)
+
+def open_verify(component,frequency,metric,**pm_args):
+    verifypath = get_verifypath(metric,**pm_args)
+    filenamelist = [component,'*',frequency]
+    filename = build_ncfilename(filenamelist)
+    return xr.open_mfdataset('/'.join([verifypath,filename]))
+
+def open_ensembleregionalmean(component,frequency,masksname):
+    rmpathroot = sysconfig['regionalmeanpathroot']
+    localdir = 'ensemble'
+    filenamelist = [component,'*',frequency,masksname]
+    filename = build_ncfilename(filenamelist)
+    return xr.open_mfdataset('/'.join([rmpathroot,localdir,filename]))
+
+def open_controlregionalmean(component,frequency,masksname):
+    rmpathroot = sysconfig['regionalmeanpathroot']
+    localdir = 'control'
+    filenamelist = [component,'*',frequency,masksname]
+    filename = build_ncfilename(filenamelist)
+    return xr.open_mfdataset('/'.join([rmpathroot,localdir,filename]))
+    
+def open_verifyregionalmean(component,frequency,masksname,metric,**pm_args):
+    verifydirectoryname = get_verifydirectoryname(metric,**pm_args)
+    rmpathroot = sysconfig['regionalmeanpathroot']
+    filenamelist = [component,'*',frequency,masksname]
+    filename = build_ncfilename(filenamelist)
+    return xr.open_mfdataset('/'.join([rmpathroot,verifydirectoryname,filename]))
+
+def delete_zarrvariable(variable,frequency,ensembleorcontrol,check=True):
+    zarrpath = get_zarrvariablepath(variable,frequency,ensembleorcontrol)
+    zarrpresent = os.path.exists(zarrpath)
+    # look for the zarr store and either open it, or delete it if you wish to overwrite
+    if zarrpresent:
+        # delete variable from zarr store if overwrite requested
+        if check:
+            print("WARNING: Deleting ensemble zarr store for variable {"+variable+"}...")
+            answer = input('-> Are you sure? [ yes | no ] (default: no) : ' )
+        else:
+            answer = 'yes'
+
+        if answer == 'yes':
+            os.system("rm -rf "+zarrpath)
+            print("... zarr store for variable {"+variable+"} removed.")
+            zarrpresent=False
+        else:
+            raise Exception("... aborting overwrite. Specify write = False to load variable.")
+    else:
+        raise Exception("Cannot delete zarr store for variable {"+variable+"}; store does not exist")
+    return zarrpresent

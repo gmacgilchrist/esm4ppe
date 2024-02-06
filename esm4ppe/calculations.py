@@ -56,9 +56,9 @@ def calc_ppp(ds,control,groupby,frequency,nlead):
     if groupby=='month':
         cvar_month = cvar.expand_dims({'month':evarmean['month']})
         for m in cvar_month['month'].values:
-            cvar_month.loc[{'month':m}]=cvar.shift(lead=-1*(m-1))
+            cvar_month.loc[{'month':m}]=cvar.roll(lead=-1*(m-1))
     # PPP
-    ppp = 1-(evarmean/cvar)
+    ppp = 1-(evarmean/cvar_month)
     return ppp
 
 def _calc_regionalmean(da,mask,weights):
