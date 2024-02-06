@@ -47,7 +47,8 @@ class esm4ppeObj:
                 start = time.time()
                 ensemble = open_ensemble(self.variable,self.frequency,self.constraint,
                                          controlasmember=controlasmember,
-                                         startyear=startyear,startmonth=startmonth)
+                                         startyear=startyear,startmonth=startmonth,
+                                        modelcomponent=self.modelcomponent)
                 end = time.time()
                 print("... ensemble opened. Elapsed time: "+str(round(end-start))+" seconds.")
                 ensemble = ensemble.drop(['time_bnds','nv']).chunk({'member':-1,'init':-1,'lead':1,'xh':"auto"})
@@ -82,7 +83,7 @@ class esm4ppeObj:
                                                   check=check)
             else:
                 control = xr.open_zarr(zarrpath)[self.variable]
-                print("Ensemble present in zarr store... opening... ensemble opened.")
+                print("Control present in zarr store... opening...")
         
         if zarrpresent==False:
             if write:

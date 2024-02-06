@@ -54,11 +54,16 @@ def preprocess_climpred(ds):
     ds = ds.chunk({'lead':-1})
     return ds
 
-def add_controlasmember(ds,control):
+def add_controlasmember(ds,control,modelcomponent=None):
     """
     Add the control simulation, over the appropriate time slice, as an ensemble member when
-    opening the ensemble.
+    opening the ensemble. Because of differences in dimension names, you need to specify which
+    model component the variable is from.
     """
+    if modelcomponent in ['ocean',None]:
+        bndsdim = 'nv'
+    elif modelcomponent in ['atm','land']:
+        bndsdim = 'bnds'
     cs = ds.isel(member=0).copy().expand_dims({'member':[0]})
     for init in ds['init']:
         # Get appropriate slice
@@ -67,8 +72,8 @@ def add_controlasmember(ds,control):
         else:
             nlead = int(3*len(ds['lead'])/10)
         timeslice = slice(
-            ds['time_bnds'].sel(init=init).isel(nv=0,member=0,lead=0).values,
-            ds['time_bnds'].sel(init=init).isel(nv=1,member=0,lead=nlead-1).values)
+            ds['time_bnds'].sel(init=init).isel({bndsdim:0,'member':0,'lead':0}).values,
+            ds['time_bnds'].sel(init=init).isel({bndsdim:1,'member':0,'lead':nlead-1}).values)
         daslice = control.sel(time=timeslice)
         daslice = daslice.rename({'time':'lead'}).assign_coords({'lead':np.arange(1,nlead+1)})
         # Add slice to "controlmember" dataset
@@ -97,7 +102,7 @@ def open_static(variable,frequency,constraint=None):
     pathDict = get_pathDict(variable,frequency,constraint=constraint)
     return gu.core.open_static(pathDict['pp'],pathDict['ppname'])
 
-def open_ensemble(variable,frequency,constraint=None,startyear="*",startmonth=None,controlasmember=True):
+def open_ensemble(variable,frequency,constraint=None,startyear="*",startmonth=None,controlasmember=True,modelcomponent=None):
     """
     Open the ensemble data for the given variable and frequency, and for the specified startyear and start month.
     If no start year and month are specified then the function returns the full ensemble.
@@ -116,7 +121,7 @@ def open_ensemble(variable,frequency,constraint=None,startyear="*",startmonth=No
     # Add control as member
     if controlasmember:
         control = open_control(variable,frequency,constraint)
-        ds = add_controlasmember(ds,control)
+        ds = add_controlasmember(ds,control,modelcomponent=modelcomponent)
     return ds
 
 def issue_dmget_esm4ppe(variable,frequency,constraint=None,startyear=None,startmonth=None,wait=False):
